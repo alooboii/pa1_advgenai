@@ -11,10 +11,13 @@ dependencies = [
     "pyyaml>=6.0,<7",
     "tokenizers>=0.21,<1",
     "torch>=2.6,<3",
+    # Kaggle's injected sitecustomize imports wrapt during Python startup.
+    "wrapt>=1.17,<3",
 ]
 
 [dependency-groups]
 dev = [
+    "nbformat>=5.10,<6",
     "pytest>=8.3,<9",
 ]
 

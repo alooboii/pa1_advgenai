@@ -137,6 +137,9 @@ def build_notebook() -> None:
             COMMAND_ENV["UV_LINK_MODE"] = "copy"
             COMMAND_ENV["PYTHONUNBUFFERED"] = "1"
             COMMAND_ENV["GIT_TERMINAL_PROMPT"] = "0"
+            # Project plotting commands write image files and must not inherit
+            # Kaggle/IPython's module://matplotlib_inline backend.
+            COMMAND_ENV["MPLBACKEND"] = "Agg"
             # Kaggle injects a sitecustomize module through PYTHONPATH. It imports
             # packages from Kaggle's system environment (including wrapt), which
             # should not leak into the lockfile-managed uv environment.
@@ -300,7 +303,7 @@ def build_notebook() -> None:
                 [
                     "uv", "run", "python", "-c",
                     (
-                        "import torch; "
+                        "import wrapt; import torch; "
                         "print('torch:', torch.__version__); "
                         "print('cuda_available:', torch.cuda.is_available()); "
                         "print('cuda_version:', torch.version.cuda); "

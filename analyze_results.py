@@ -7,6 +7,12 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
+# Analysis is a batch command, including when it is launched from Jupyter.
+# Kaggle exports its inline backend through MPLBACKEND, but that backend lives in
+# the notebook environment and is not necessarily installed in the uv project.
+# Force Matplotlib's non-interactive backend before importing pyplot so plotting
+# does not depend on the parent notebook's environment.
+os.environ["MPLBACKEND"] = "Agg"
 os.environ.setdefault("MPLCONFIGDIR", str(Path(".cache/matplotlib").resolve()))
 
 import matplotlib.pyplot as plt

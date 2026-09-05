@@ -141,9 +141,11 @@ def main() -> None:
     Path("artifacts").mkdir(exist_ok=True)
     Path("artifacts/sweep_status.json").write_text(json.dumps(status, indent=2) + "\n")
     if args.phase in {"full", "all"}:
-        subprocess.run([sys.executable, "analyze_results.py"], check=False)
-        subprocess.run([sys.executable, "scripts/analyze_feasibility.py"], check=False)
-        subprocess.run([sys.executable, "scripts/package_results.py"], check=False)
+        # Post-processing is part of a successful full sweep. Propagate failures
+        # instead of producing a misleading successful status and stale bundle.
+        subprocess.run([sys.executable, "analyze_results.py"], check=True)
+        subprocess.run([sys.executable, "scripts/analyze_feasibility.py"], check=True)
+        subprocess.run([sys.executable, "scripts/package_results.py"], check=True)
     print(json.dumps(status, indent=2))
 
 
