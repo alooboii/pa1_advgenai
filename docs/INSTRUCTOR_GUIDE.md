@@ -43,6 +43,13 @@ full runs, evaluation, aggregation, and safe result packaging.
 Return `artifacts/feasibility-results.tar.gz`. It contains only JSON/JSONL metrics,
 environment records, summaries, plots, and tables—never model state or data.
 
+For Kaggle, upload `notebooks/kaggle_instructor_feasibility.ipynb` and edit its
+single parameters cell. It supports a private GitHub repository through a Kaggle
+Secret named `GITHUB_TOKEN`, or an attached private Kaggle Dataset containing the
+repository. The default `all` phase performs the commands above. To split the sweep
+across sessions, run `lr`, `screen`, and `full` in order and restore `data/`, `runs/`,
+and `artifacts/` from the prior private notebook output.
+
 ## Release decision
 
 Require all four reversions when the baseline plus four student runs total at most
@@ -62,4 +69,3 @@ if its only measured advantage is at one seed or one scale.
 - Day 4: SwiGLU, block, and full LM
 - Day 5: loss, AdamW, data, and checkpointing
 - Weekend: cloud runs and report
-
