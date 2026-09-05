@@ -137,6 +137,11 @@ def build_notebook() -> None:
             COMMAND_ENV["UV_LINK_MODE"] = "copy"
             COMMAND_ENV["PYTHONUNBUFFERED"] = "1"
             COMMAND_ENV["GIT_TERMINAL_PROMPT"] = "0"
+            # Kaggle injects a sitecustomize module through PYTHONPATH. It imports
+            # packages from Kaggle's system environment (including wrapt), which
+            # should not leak into the lockfile-managed uv environment.
+            COMMAND_ENV.pop("PYTHONPATH", None)
+            COMMAND_ENV["PYTHONNOUSERSITE"] = "1"
 
 
             def run_command(arguments, *, cwd=None, env=None, label=None):
