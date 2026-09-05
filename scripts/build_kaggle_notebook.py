@@ -55,7 +55,7 @@ def build_notebook() -> None:
             """
             ## 1. Parameters
 
-            Edit only this cell for a normal run. `GITHUB_REF` should ideally be an immutable commit SHA; the initial instructor implementation commit is shown as the default.
+            Edit only this cell for a normal run. The notebook targets the private `alooboii/pa1_advgenai` repository on `main`. For the final calibration, replace `main` with the exact commit SHA you want to freeze.
             """
         ),
         code(
@@ -64,8 +64,8 @@ def build_notebook() -> None:
 
             # Source acquisition: "git" or "kaggle_dataset".
             SOURCE_MODE = "git"
-            GITHUB_REPOSITORY = "YOUR_ORG/YOUR_PRIVATE_REPO"
-            GITHUB_REF = "de84202"
+            GITHUB_REPOSITORY = "alooboii/pa1_advgenai"
+            GITHUB_REF = "main"
             KAGGLE_DATASET_SOURCE = "/kaggle/input/YOUR-PRIVATE-REPOSITORY-DATASET"
 
             # Optional path to a previous Kaggle output containing data/, runs/,
