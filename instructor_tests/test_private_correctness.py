@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 
-from modern_transformer.checkpoint import load_checkpoint, save_checkpoint
+from modern_transformer.checkpoint import capture_rng_state, load_checkpoint, restore_rng_state, save_checkpoint
 from modern_transformer.config import ModelConfig, load_experiment_config
 from modern_transformer.data import get_batch
 from modern_transformer.model import TransformerLM
@@ -85,6 +85,34 @@ def test_checkpoint_restores_exact_next_update(tmp_path: Path) -> None:
     torch.testing.assert_close(actual_loss, expected_loss)
     for actual, expected in zip(restored_model.parameters(), expected_model.parameters()):
         torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.private
+def test_rng_restore_normalizes_mapped_state_tensors_to_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = capture_rng_state()
+    restored_torch_state: list[torch.Tensor] = []
+
+    class MappedState:
+        def __init__(self, value: torch.Tensor) -> None:
+            self.value = value
+            self.cpu_called = False
+
+        def detach(self) -> "MappedState":
+            return self
+
+        def cpu(self) -> torch.Tensor:
+            self.cpu_called = True
+            return self.value
+
+    mapped_torch_state = MappedState(state["torch"])
+    state["torch"] = mapped_torch_state
+    monkeypatch.setattr(torch, "set_rng_state", restored_torch_state.append)
+
+    restore_rng_state(state)
+
+    assert mapped_torch_state.cpu_called
+    assert len(restored_torch_state) == 1
+    assert restored_torch_state[0] is mapped_torch_state.value
 
 
 @pytest.mark.private

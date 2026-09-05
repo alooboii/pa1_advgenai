@@ -25,11 +25,13 @@ def capture_rng_state(data_generator: torch.Generator | None = None) -> dict[str
 def restore_rng_state(state: dict[str, Any], data_generator: torch.Generator | None = None) -> None:
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"])
+    # A checkpoint loaded with map_location="cuda" or "mps" moves every tensor,
+    # including RNG byte tensors. Generator state APIs require CPU byte tensors.
+    torch.set_rng_state(state["torch"].detach().cpu())
     if "cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(state["cuda"])
+        torch.cuda.set_rng_state_all([item.detach().cpu() for item in state["cuda"]])
     if data_generator is not None and "data_generator" in state:
-        data_generator.set_state(state["data_generator"])
+        data_generator.set_state(state["data_generator"].detach().cpu())
 
 
 def save_checkpoint(
