@@ -1,0 +1,6 @@
+extends: base.yaml
+model:
+  ffn_style: relu
+  d_ff: 1024
+train:
+  run_name: ablation_relu

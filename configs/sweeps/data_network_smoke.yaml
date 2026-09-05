@@ -1,0 +1,7 @@
+source: huggingface
+tokenizer_path: ../../assets/tokenizer.json
+eot_token: <|endoftext|>
+train_path: data/network_smoke/train.bin
+validation_path: data/network_smoke/validation.bin
+train_tokens: 10000
+validation_tokens: 5000

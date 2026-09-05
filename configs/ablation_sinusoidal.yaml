@@ -1,0 +1,5 @@
+extends: base.yaml
+model:
+  position_style: sinusoidal
+train:
+  run_name: ablation_sinusoidal

@@ -1,0 +1,12 @@
+learning_rates: [0.0003, 0.0006, 0.001, 0.002]
+screen_steps: 245
+screen_warmup_steps: 25
+screen_seeds: [17, 42, 73]
+full_steps: 1500
+architectures:
+  baseline: configs/baseline.yaml
+  post_layernorm: configs/ablation_post_layernorm.yaml
+  sinusoidal: configs/ablation_sinusoidal.yaml
+  relu: configs/ablation_relu.yaml
+  mha: configs/ablation_mha.yaml
+  original_composite: configs/original_composite.yaml

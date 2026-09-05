@@ -1,0 +1,7 @@
+source: huggingface
+tokenizer_path: ../assets/tokenizer.json
+eot_token: <|endoftext|>
+train_path: data/tinystories/train.bin
+validation_path: data/tinystories/validation.bin
+train_tokens: 25000000
+validation_tokens: 1000000

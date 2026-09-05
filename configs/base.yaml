@@ -1,0 +1,41 @@
+model:
+  vocab_size: 4096
+  max_seq_len: 256
+  d_model: 256
+  n_layers: 4
+  n_q_heads: 8
+  n_kv_heads: 2
+  d_ff: 704
+  rope_theta: 10000.0
+  norm_eps: 1.0e-5
+  norm_style: pre_rms
+  position_style: rope
+  ffn_style: swiglu
+  init_std: 0.02
+data:
+  train_path: data/tinystories/train.bin
+  validation_path: data/tinystories/validation.bin
+train:
+  run_name: baseline
+  output_dir: runs
+  device: auto
+  seed: 42
+  sequence_length: 128
+  batch_size: 64
+  gradient_accumulation_steps: 1
+  max_steps: 1500
+  learning_rate: 0.0006
+  min_lr_ratio: 0.1
+  warmup_steps: 100
+  beta1: 0.9
+  beta2: 0.95
+  eps: 1.0e-8
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 100
+  eval_batches: 20
+  log_interval: 10
+  checkpoint_interval: 500
+  amp: true
+  amp_dtype: float16
+  resume: true

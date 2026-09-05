@@ -1,0 +1,8 @@
+source: fixture
+tokenizer_path: ../assets/tokenizer.json
+fixture_path: ../tests/fixtures/tiny_stories.txt
+eot_token: <|endoftext|>
+train_path: data/debug/train.bin
+validation_path: data/debug/validation.bin
+train_tokens: 20000
+validation_tokens: 5000

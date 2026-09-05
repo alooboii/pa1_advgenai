@@ -1,0 +1,5 @@
+extends: base.yaml
+model:
+  n_kv_heads: 8
+train:
+  run_name: ablation_mha

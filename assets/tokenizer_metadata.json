@@ -1,0 +1,14 @@
+{
+  "dataset": "roneneldan/TinyStories",
+  "revision": "f54c09fd23315a6f9c86f9dc80f725de7d8f9c64",
+  "training_documents": 50000,
+  "algorithm": "byte-level BPE",
+  "vocab_size": 4096,
+  "special_tokens": [
+    "<|endoftext|>"
+  ],
+  "special_token_ids": {
+    "<|endoftext|>": 0
+  },
+  "sha256": "79e045462df76bfcff4c6cd980b67784a85b88ab0dd7398ba2970359ed2a6386"
+}

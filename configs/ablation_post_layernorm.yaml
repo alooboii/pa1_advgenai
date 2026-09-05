@@ -1,0 +1,5 @@
+extends: base.yaml
+model:
+  norm_style: post_layer
+train:
+  run_name: ablation_post_layernorm

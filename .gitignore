@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+.coverage
+.DS_Store
+
+# Generated data, model state, and experiment outputs
+data/
+runs/
+artifacts/
+checkpoints/
+*.pt
+*.pth
+*.bin
+
+# Generated student release
+dist/

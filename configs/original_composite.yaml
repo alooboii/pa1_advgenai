@@ -1,0 +1,9 @@
+extends: base.yaml
+model:
+  n_kv_heads: 8
+  norm_style: post_layer
+  position_style: sinusoidal
+  ffn_style: relu
+  d_ff: 1024
+train:
+  run_name: original_composite
