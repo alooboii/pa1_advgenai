@@ -16,9 +16,9 @@ import torch
 
 from .checkpoint import load_checkpoint, save_checkpoint
 from .config import ExperimentConfig
-from .data import get_batch, load_token_array
+from .data import EXPECTED_VOCAB_SIZE, get_batch, load_metadata, load_token_array
 from .model import TransformerLM
-from .optim import AdamW, cross_entropy
+from .optim import AdamW, clip_gradients, cosine_learning_rate, cross_entropy
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -44,14 +44,31 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def learning_rate_at_step(config: ExperimentConfig, step: int) -> float:
+def learning_rate_at_step(
+    config: ExperimentConfig,
+    step: int,
+    *,
+    elapsed_seconds: float | None = None,
+) -> float:
     train = config.train
-    if step < train.warmup_steps:
-        return train.learning_rate * (step + 1) / train.warmup_steps
-    progress = (step - train.warmup_steps) / max(1, train.max_steps - train.warmup_steps - 1)
-    cosine = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
-    factor = train.min_lr_ratio + (1 - train.min_lr_ratio) * cosine
-    return train.learning_rate * factor
+    if train.max_duration_seconds is not None and elapsed_seconds is not None:
+        progress = min(max(elapsed_seconds / train.max_duration_seconds, 0.0), 1.0)
+        warmup = train.duration_warmup_fraction
+        if warmup > 0 and progress < warmup:
+            return train.learning_rate * progress / warmup
+        cosine_progress = (progress - warmup) / (1.0 - warmup)
+        cosine_progress = min(max(cosine_progress, 0.0), 1.0)
+        minimum = train.learning_rate * train.min_lr_ratio
+        return minimum + 0.5 * (1.0 + math.cos(math.pi * cosine_progress)) * (
+            train.learning_rate - minimum
+        )
+    return cosine_learning_rate(
+        step,
+        max_learning_rate=train.learning_rate,
+        min_learning_rate=train.learning_rate * train.min_lr_ratio,
+        warmup_steps=train.warmup_steps,
+        cosine_cycle_steps=train.max_steps,
+    )
 
 
 def _autocast_context(config: ExperimentConfig, device: torch.device):
@@ -74,6 +91,7 @@ def evaluate_loss(
     seed: int,
     config: ExperimentConfig,
 ) -> float:
+    """Return deterministic mean validation loss and restore model mode."""
     generator = torch.Generator().manual_seed(seed)
     was_training = model.training
     model.eval()
@@ -84,6 +102,52 @@ def evaluate_loss(
             losses.append(cross_entropy(model(inputs), targets).float().item())
     model.train(was_training)
     return float(np.mean(losses))
+
+
+def train_step(
+    model: TransformerLM,
+    optimizer: torch.optim.Optimizer,
+    tokens: np.ndarray,
+    *,
+    config: ExperimentConfig,
+    device: torch.device,
+    generator: torch.Generator,
+    scaler: torch.amp.GradScaler,
+) -> dict[str, float]:
+    """Perform one optimizer step, including configured gradient accumulation."""
+    # BEGIN SOLUTION
+    optimizer.zero_grad(set_to_none=True)
+    accumulated_loss = 0.0
+    accumulation_steps = config.train.gradient_accumulation_steps
+    for _ in range(accumulation_steps):
+        inputs, targets = get_batch(
+            tokens,
+            config.train.batch_size,
+            config.train.sequence_length,
+            device,
+            generator,
+        )
+        with _autocast_context(config, device):
+            microbatch_loss = cross_entropy(model(inputs), targets)
+            scaled_loss = microbatch_loss / accumulation_steps
+        scaler.scale(scaled_loss).backward()
+        accumulated_loss += scaled_loss.detach().float().item()
+
+    scaler.unscale_(optimizer)
+    gradient_norm = clip_gradients(model.parameters(), config.train.grad_clip)
+    scaler.step(optimizer)
+    scaler.update()
+    tokens_processed = (
+        config.train.batch_size
+        * config.train.sequence_length
+        * config.train.gradient_accumulation_steps
+    )
+    return {
+        "loss": accumulated_loss,
+        "gradient_norm": gradient_norm,
+        "tokens": float(tokens_processed),
+    }
+    # END SOLUTION
 
 
 def _environment() -> dict[str, Any]:
@@ -107,9 +171,16 @@ def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
 
 
 def train(config: ExperimentConfig) -> dict[str, Any]:
+    """Run or resume training and produce checkpoints, metrics, and summary."""
     # BEGIN SOLUTION
     set_seed(config.train.seed)
     device = resolve_device(config.train.device)
+    data_metadata = load_metadata(config.data.dataset_dir)
+    data_vocab_size = data_metadata.get("tokenizer", {}).get("vocab_size")
+    if data_vocab_size != EXPECTED_VOCAB_SIZE or config.model.vocab_size != data_vocab_size:
+        raise ValueError(
+            f"model vocabulary ({config.model.vocab_size}) does not match prepared data ({data_vocab_size})"
+        )
     run_dir = Path(config.train.output_dir) / config.train.run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = run_dir / "metrics.jsonl"
@@ -156,36 +227,43 @@ def train(config: ExperimentConfig) -> dict[str, Any]:
     final_train_loss = float("nan")
     final_validation_loss = float("nan")
 
+    completed_steps = start_step
     for step in range(start_step, config.train.max_steps):
         step_started = time.perf_counter()
-        lr = learning_rate_at_step(config, step)
+        elapsed_before_step = time.perf_counter() - started
+        lr = learning_rate_at_step(
+            config,
+            step,
+            elapsed_seconds=elapsed_before_step,
+        )
         for group in optimizer.param_groups:
             group["lr"] = lr
-        optimizer.zero_grad(set_to_none=True)
-        accumulated_loss = 0.0
-        for _ in range(config.train.gradient_accumulation_steps):
-            inputs, targets = get_batch(
-                train_tokens,
-                config.train.batch_size,
-                config.train.sequence_length,
-                device,
-                data_generator,
-            )
-            with _autocast_context(config, device):
-                loss = cross_entropy(model(inputs), targets) / config.train.gradient_accumulation_steps
-            scaler.scale(loss).backward()
-            accumulated_loss += loss.detach().float().item()
-
-        scaler.unscale_(optimizer)
-        gradient_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), config.train.grad_clip))
-        scaler.step(optimizer)
-        scaler.update()
-        step_tokens = config.train.batch_size * config.train.sequence_length * config.train.gradient_accumulation_steps
+        step_metrics = train_step(
+            model,
+            optimizer,
+            train_tokens,
+            config=config,
+            device=device,
+            generator=data_generator,
+            scaler=scaler,
+        )
+        gradient_norm = step_metrics["gradient_norm"]
+        step_tokens = int(step_metrics["tokens"])
         tokens_processed += step_tokens
         duration = time.perf_counter() - step_started
-        final_train_loss = accumulated_loss
+        final_train_loss = step_metrics["loss"]
+        completed_steps = step + 1
+        elapsed_after_step = time.perf_counter() - started
+        duration_reached = (
+            config.train.max_duration_seconds is not None
+            and elapsed_after_step >= config.train.max_duration_seconds
+        )
 
-        should_evaluate = (step + 1) % config.train.eval_interval == 0 or step + 1 == config.train.max_steps
+        should_evaluate = (
+            completed_steps % config.train.eval_interval == 0
+            or completed_steps == config.train.max_steps
+            or duration_reached
+        )
         if should_evaluate:
             final_validation_loss = evaluate_loss(
                 model,
@@ -197,9 +275,9 @@ def train(config: ExperimentConfig) -> dict[str, Any]:
                 seed=config.train.seed + 20_000,
                 config=config,
             )
-        if (step + 1) % config.train.log_interval == 0 or should_evaluate:
+        if completed_steps % config.train.log_interval == 0 or should_evaluate:
             record = {
-                "step": step + 1,
+                "step": completed_steps,
                 "tokens": tokens_processed,
                 "train_loss": final_train_loss,
                 "validation_loss": final_validation_loss if should_evaluate else None,
@@ -212,16 +290,22 @@ def train(config: ExperimentConfig) -> dict[str, Any]:
             print(json.dumps(record, sort_keys=True), flush=True)
         if not math.isfinite(final_train_loss):
             raise FloatingPointError(f"training diverged at step {step + 1}")
-        if (step + 1) % config.train.checkpoint_interval == 0 or step + 1 == config.train.max_steps:
+        if (
+            completed_steps % config.train.checkpoint_interval == 0
+            or completed_steps == config.train.max_steps
+            or duration_reached
+        ):
             save_checkpoint(
                 checkpoint_path,
                 model=model,
                 optimizer=optimizer,
-                step=step + 1,
+                step=completed_steps,
                 config=config.to_dict(),
                 data_generator=data_generator,
                 scaler=scaler,
             )
+        if duration_reached:
+            break
 
     elapsed = time.perf_counter() - started
     peak_memory = torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None
@@ -229,7 +313,7 @@ def train(config: ExperimentConfig) -> dict[str, Any]:
         "run_name": config.train.run_name,
         "config_fingerprint": config.fingerprint,
         "parameter_count": model.parameter_count(),
-        "steps": config.train.max_steps,
+        "steps": completed_steps,
         "tokens": tokens_processed,
         "final_train_loss": final_train_loss,
         "validation_context": config.train.sequence_length,
