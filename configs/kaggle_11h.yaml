@@ -12,6 +12,12 @@ model:
   norm_eps: 1.0e-5
   init_std: 0.02
 
+data:
+  dataset_dir: data/tinystories
+  metadata_path: data/tinystories/metadata.json
+  train_path: data/tinystories/data/train.bin
+  validation_path: data/tinystories/data/validation.bin
+
 train:
   run_name: kaggle_11h
   device: cuda

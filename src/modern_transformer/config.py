@@ -11,6 +11,11 @@ from typing import Any, Literal
 import yaml
 
 
+NormStyle = Literal["pre_rms", "post_layer"]
+PositionStyle = Literal["rope", "sinusoidal"]
+FFNStyle = Literal["swiglu", "relu"]
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     vocab_size: int = 8192
@@ -22,6 +27,9 @@ class ModelConfig:
     d_ff: int = 704
     rope_theta: float = 10_000.0
     norm_eps: float = 1e-5
+    norm_style: NormStyle = "pre_rms"
+    position_style: PositionStyle = "rope"
+    ffn_style: FFNStyle = "swiglu"
     init_std: float = 0.02
 
     def __post_init__(self) -> None:
@@ -43,6 +51,12 @@ class ModelConfig:
             raise ValueError("n_q_heads must be divisible by n_kv_heads")
         if self.head_dim % 2:
             raise ValueError("RoPE requires an even head dimension")
+        if self.norm_style not in ("pre_rms", "post_layer"):
+            raise ValueError(f"unknown norm_style: {self.norm_style}")
+        if self.position_style not in ("rope", "sinusoidal"):
+            raise ValueError(f"unknown position_style: {self.position_style}")
+        if self.ffn_style not in ("swiglu", "relu"):
+            raise ValueError(f"unknown ffn_style: {self.ffn_style}")
 
     @property
     def head_dim(self) -> int:
