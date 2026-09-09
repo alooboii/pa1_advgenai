@@ -7,6 +7,46 @@ import torch
 from torch import Tensor, nn
 
 
+def cosine_learning_rate(
+    step: int,
+    *,
+    max_learning_rate: float,
+    min_learning_rate: float,
+    warmup_steps: int,
+    cosine_cycle_steps: int,
+) -> float:
+    if step < 0:
+        raise ValueError("step must be non-negative")
+    if not 0 <= warmup_steps < cosine_cycle_steps:
+        raise ValueError("require 0 <= warmup_steps < cosine_cycle_steps")
+    if step < warmup_steps:
+        return max_learning_rate * step / warmup_steps if warmup_steps else max_learning_rate
+    if step > cosine_cycle_steps:
+        return min_learning_rate
+    progress = (step - warmup_steps) / (cosine_cycle_steps - warmup_steps)
+    return min_learning_rate + 0.5 * (max_learning_rate - min_learning_rate) * (
+        1 + math.cos(math.pi * progress)
+    )
+
+
+@torch.no_grad()
+def clip_gradients(
+    parameters: Iterable[nn.Parameter],
+    max_l2_norm: float,
+    eps: float = 1e-6,
+) -> float:
+    if max_l2_norm <= 0:
+        raise ValueError("max_l2_norm must be positive")
+    gradients = [parameter.grad for parameter in parameters if parameter.grad is not None]
+    if not gradients:
+        return 0.0
+    norm = sum(gradient.float().square().sum() for gradient in gradients).sqrt()
+    scale = torch.clamp(max_l2_norm / (norm + eps), max=1.0)
+    for gradient in gradients:
+        gradient.mul_(scale.to(device=gradient.device, dtype=gradient.dtype))
+    return float(norm.item())
+
+
 def cross_entropy(logits: Tensor, targets: Tensor) -> Tensor:
     """Mean next-token cross entropy without torch.nn.functional.cross_entropy."""
     # BEGIN SOLUTION

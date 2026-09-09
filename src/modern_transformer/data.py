@@ -20,6 +20,35 @@ TINYSTORIES_FILES = {
     "train": "data/train-00000-of-00004-2d5a1467fff1081b.parquet",
     "validation": "data/validation-00000-of-00001-869c898b519ad725.parquet",
 }
+EXPECTED_VOCAB_SIZE = 8192
+
+
+def load_metadata(dataset_dir: str | Path) -> dict[str, Any]:
+    path = Path(dataset_dir) / "metadata.json"
+    if not path.exists():
+        raise FileNotFoundError(f"dataset metadata not found: {path}")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        raise ValueError(f"invalid dataset metadata at {path}: {error}") from error
+
+
+def load_tokenizer(dataset_dir: str | Path) -> Tokenizer:
+    dataset_dir = Path(dataset_dir)
+    metadata = load_metadata(dataset_dir)
+    tokenizer_metadata = metadata.get("tokenizer", {})
+    tokenizer_path = dataset_dir / tokenizer_metadata.get(
+        "path", "tokenizer/tokenizer.json"
+    )
+    if not tokenizer_path.exists():
+        raise FileNotFoundError(f"tokenizer not found: {tokenizer_path}")
+    tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    if tokenizer.get_vocab_size() != EXPECTED_VOCAB_SIZE:
+        raise ValueError(
+            f"expected an {EXPECTED_VOCAB_SIZE}-token tokenizer, "
+            f"got {tokenizer.get_vocab_size()}"
+        )
+    return tokenizer
 
 
 def load_token_array(path: str | Path) -> np.memmap:
